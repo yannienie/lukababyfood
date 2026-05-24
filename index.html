@@ -327,7 +327,7 @@
             { id: "2027-01", name: "2027年 1月", en: "Jan 2027", age: "13個月大" },
             { id: "2027-02", name: "2027年 2月", en: "Feb 2027", age: "14個月大" },
             { id: "2027-03", name: "2027年 3月", en: "Mar 2027", age: "15個月大" },
-            { id: "2027-04", name: "2027年 4月", en: "Apr 2027", age: "16個月大" },
+            { id: "2027-04", name: "2027年 4月", minSize: "16個月大" },
             { id: "2027-05", name: "2027年 5月", en: "May 2027", age: "17個月大" }
         ];
 
@@ -348,7 +348,7 @@
             const curr = new Date(dateStr);
             const diffTime = Math.abs(curr - start);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            const totalDays = diffDays + 155; // 5M3D
+            const totalDays = diffDays + 155; 
             return Math.floor(totalDays / 30.5);
         }
 
@@ -397,11 +397,12 @@
         let familyId = "MyBaby2026"; 
         let user = null;
         let fallbackTimeout = null;
+        let cloudUnsubscribe = null; // 🚨 保存雲端監聽器解綁函數，防止多重監聽 Bug
         
         let localState = {
             trackingState: {},
             selectedTests: {},
-            dayStatuses: {} // 用於替代原先的單一checkedDays狀態，保存豐富的多選行為
+            dayStatuses: {} 
         };
 
         // 診斷日誌功能
@@ -437,12 +438,10 @@
             localState.selectedTests = selected ? JSON.parse(selected) : {};
             localState.dayStatuses = statuses ? JSON.parse(statuses) : {};
 
-            // 確保強化鐵米粉(g1)默認是通過的
             if (!localState.trackingState["g1"]) {
                 localState.trackingState["g1"] = { passed: true, allergic: false, note: "5/21-5/23 已成功試完3天" };
             }
             if (Object.keys(localState.selectedTests).length === 0) {
-                // 給予一套基礎的推薦初始值
                 localState.selectedTests = {
                     "2026-05-24": "g2", // 白米粥
                     "2026-05-27": "v1", // 節瓜
@@ -460,51 +459,51 @@
         // 初始化系統引擎
         async function initializeAppEngine() {
             logToConsole("====================================");
-            logToConsole("⚙️ 啟動網頁初始化引擎...");
+            logToConsole(`⚙️ 啟動網頁連線引擎，家庭密碼對接目標: [${familyId}]`);
             loadLocalBackup();
             document.getElementById("family-id-input").value = familyId;
 
-            // 設置自動安全降級定時器
+            // 卸載之前可能存在的任何舊雲端監聽器，防止多重複蓋衝突
+            if (cloudUnsubscribe) {
+                logToConsole("🧹 正在清理舊的家庭雲端連接監聽線路...");
+                cloudUnsubscribe();
+                cloudUnsubscribe = null;
+            }
+
+            // 重啟逾時防線
+            if (fallbackTimeout) clearTimeout(fallbackTimeout);
             fallbackTimeout = setTimeout(() => {
                 if (!isCloudMode) {
                     logToConsole("⏳ 連線偵測超時 (6秒無響應)，安全降級啟動本地儲存。", "error");
-                    forceLocalMode("📡 連線逾時，切換至本地快取。如果您已設定好雲端，此超時可能是由於 AdBlocker (廣告阻擋器) 或 Brave 瀏覽器阻擋了 Google 服務！");
+                    forceLocalMode("📡 連線逾時，切換至本地快取模式。");
                 }
             }, 6000); 
 
             try {
                 if (firebaseConfig) {
-                    logToConsole("📦 正在偵測 Firebase 套件是否加載...");
                     if (typeof firebase === "undefined") {
-                        throw new Error("網頁載入 Firebase SDK 失敗！請檢查您的網絡或是否開啟了防廣告/保護插件。");
+                        throw new Error("網頁載入 Firebase SDK 失敗！請檢查網絡。");
                     }
                     
-                    logToConsole("🔧 初始化 Firebase App 實體...");
                     if (!firebase.apps.length) {
                         firebase.initializeApp(firebaseConfig);
                     }
-                    logToConsole("✅ Firebase App 初始化成功。", "success");
                     
                     const auth = firebase.auth();
                     
                     // 登入監聽
                     auth.onAuthStateChanged((currentUser) => {
                         if (currentUser) {
-                            logToConsole(`👤 帳號登入狀態變更: 匿名 ID (${currentUser.uid}) 已成功握手。`, "success");
                             user = currentUser;
                             setupCloudSync(fallbackTimeout);
                         }
                     });
 
-                    logToConsole("🔑 正在嘗試以「匿名方式」登入 Firebase Auth 服務...");
-                    await auth.signInAnonymously().then(() => {
-                        logToConsole("🔓 匿名安全登入命令已送出，等待伺服器驗證...", "success");
-                    }).catch(err => {
+                    logToConsole("🔑 執行匿名授權通行證對接...");
+                    await auth.signInAnonymously().catch(err => {
                         logToConsole(`❌ 登入遭到拒絕。代碼: ${err.code}`, "error");
                         if (err.code === 'auth/operation-not-allowed') {
-                            throw new Error("⚠️ 登入失敗：請前往 Firebase Console -> Authentication -> Sign-in method 啟用『匿名 (Anonymous)』登入方式！");
-                        } else if (err.code === 'auth/network-request-failed') {
-                            throw new Error("⚠️ 登入失敗：連線被瀏覽器攔截。請「關閉 AdBlocker / Brave 屏蔽盾」或嘗試暫時關閉手機 Wi-Fi、改用 4G/5G 網絡打開此頁面。");
+                            throw new Error("⚠️ 請至 Firebase 後台啟用匿名驗證！");
                         } else {
                             throw err;
                         }
@@ -516,24 +515,25 @@
             } catch (err) {
                 logToConsole(`💥 初始化發生崩潰：${err.message}`, "error");
                 clearTimeout(fallbackTimeout);
-                forceLocalMode(err.message || "⚠️ 無法連接至 Firebase 服務，請確認網絡連線。");
+                forceLocalMode(err.message || "⚠️ 無法連接至 Firebase 服務。");
             }
         }
 
         // 連接並實時監聽雲端資料庫
         function setupCloudSync(timeoutToClear) {
-            logToConsole("📡 正在向 Firestore 雲端資料庫發送讀寫測試請求...");
+            logToConsole(`📡 正在與雲端資料庫對接 [${familyId}] 的專屬保險箱...`);
             const db = firebase.firestore();
             
-            // 使用嚴格 6 段偶數路徑儲存以防報錯
+            // 六段偶數路徑符合標準安全性規範
             const docRef = db.doc(`artifacts/${appId}/public/data/${familyId}/shared_data`);
 
-            docRef.onSnapshot((docSnap) => {
-                logToConsole("🎉 雲端連線測試大成功！已成功握手並讀取遠端數據。", "success");
+            // 🚨【重要修復】：保存監聽器解綁函數
+            cloudUnsubscribe = docRef.onSnapshot((docSnap) => {
+                logToConsole(`🎉 連接成功！已成功綁定家庭 [${familyId}] 的實時雲端線路！`, "success");
                 clearTimeout(timeoutToClear);
                 isCloudMode = true;
 
-                // 更新 UI 徽章與狀態欄
+                // 更新 UI 狀態
                 const badge = document.getElementById("mode-badge");
                 badge.innerText = "雲端同步模式";
                 badge.className = "text-xs bg-emerald-500 text-white px-2 py-0.5 rounded-full ml-1 font-bold";
@@ -543,25 +543,22 @@
 
                 document.getElementById("status-icon-container").className = "p-2 bg-emerald-200 rounded-full mr-3 text-emerald-700";
                 document.getElementById("status-icon").setAttribute("data-lucide", "wifi");
-                document.getElementById("sync-text").innerText = "☁️ 雲端已安全連線";
+                document.getElementById("sync-text").innerText = `☁️ 雲端已安全連線: [${familyId}]`;
                 document.getElementById("sync-subtext").innerText = "全家人與工人姐姐的手機數據正在實時即時同步中。";
 
                 if (docSnap.exists()) {
-                    logToConsole("📥 雲端有現成備份。正在同步更新至本機畫面。");
+                    logToConsole("📥 雲端檢測到新數據異動，正在實時同步至您的螢幕...");
                     const data = docSnap.data();
                     localState.trackingState = data.trackingState || {};
                     localState.selectedTests = data.selectedTests || {};
                     localState.dayStatuses = data.dayStatuses || {};
                     saveLocalBackup();
                 } else {
-                    logToConsole("📝 雲端無此家庭密碼之紀錄。正在為您建立初始雲端結構...");
+                    logToConsole("📝 雲端無此家庭之存檔。正在將您的本地紀錄上傳並備份...");
                     docRef.set(localState).then(() => {
-                        logToConsole("💾 雲端初始檔案初始化寫入完成。", "success");
+                        logToConsole("💾 雲端初始檔案上傳完成。", "success");
                     }).catch(err => {
                         logToConsole(`⚠️ 寫入雲端失敗：${err.code} - ${err.message}`, "error");
-                        if (err.code === 'permission-denied') {
-                            forceLocalMode("⚠️ 寫入雲端被拒絕：請確認您已在 Firestore Database 內將 Rules (規則) 改成允許讀寫！");
-                        }
                     });
                 }
 
@@ -569,11 +566,7 @@
             }, (error) => {
                 logToConsole(`❌ 監聽雲端發生錯誤：${error.code} - ${error.message}`, "error");
                 clearTimeout(timeoutToClear);
-                if (error.code === 'permission-denied') {
-                    forceLocalMode("⚠️ 讀取雲端被拒絕：請確認您已在 Firestore Database 的『Rules 規則』中將安全性規則改成允許讀寫（測試模式）！");
-                } else {
-                    forceLocalMode("⚠️ 載入 Firestore 數據時發生錯誤。");
-                }
+                forceLocalMode("⚠️ 讀取雲端被拒絕。");
             });
         }
 
@@ -598,24 +591,23 @@
             refreshUI();
         }
 
-        // 切換家庭 ID 重新對接
+        // 【關鍵改進】：切換家庭 ID 立即重啟引擎以重新對接 Snapshot 監聽
         function handleFamilyIdChange(newId) {
             if (!newId.trim()) return;
             familyId = newId.trim();
-            initializeAppEngine();
+            initializeAppEngine(); // 🚨 徹底清除舊連線，以全新 ID 建立握手
         }
 
-        // 統一更新雲端或本地數據 (【關鍵修復】：立刻在本機刷新 UI 確保秒速響應！)
+        // 統一更新雲端或本地數據 (Firestore 寫入安全防護)
         async function updateDataField(field, key, value) {
             localState[field][key] = value;
             saveLocalBackup();
             
-            // 🚨【關鍵修復 1】：不管有沒有聯網，點選後立刻在 0.01 秒內重新繪製畫面！
+            // 🚨 0.01 秒本地極速重繪畫面
             refreshUI();
 
             if (isCloudMode && firebase.auth().currentUser) {
                 const db = firebase.firestore();
-                // 🚨【關鍵修復 2】：使用 6 段偶數路徑
                 const docRef = db.doc(`artifacts/${appId}/public/data/${familyId}/shared_data`);
                 try {
                     await docRef.set(localState);
@@ -697,14 +689,14 @@
             
             localState.dayStatuses[dateStr][statusKey] = isChecked;
             
-            // 互斥控制：寶寶喜歡 (liked) 與 寶寶不喜歡 (disliked) 不能同時存在
+            // 互斥控制：寶寶喜歡 (liked) 與 寶寶不喜歡 (disliked)
             if (statusKey === 'liked' && isChecked) {
                 localState.dayStatuses[dateStr]['disliked'] = false;
             } else if (statusKey === 'disliked' && isChecked) {
                 localState.dayStatuses[dateStr]['liked'] = false;
             }
             
-            // 互斥控制：寶寶吃光了 (finished) 與 寶寶沒有吃光 (leftover) 不能同時存在
+            // 互斥控制：寶寶吃光了 (finished) 與 沒有吃光 (leftover)
             if (statusKey === 'finished' && isChecked) {
                 localState.dayStatuses[dateStr]['leftover'] = false;
             } else if (statusKey === 'leftover' && isChecked) {
@@ -865,11 +857,10 @@
                 tdSafeMatch.innerHTML = safeHtml;
                 tr.appendChild(tdSafeMatch);
 
-                // 5. 狀態多選打卡（【關鍵改進】：全新多選 UI，觸控極敏捷，自動互斥）
+                // 5. 狀態多選打卡
                 const tdStatus = document.createElement("td");
                 tdStatus.className = "p-3";
                 
-                // 獲取目前的狀態物件，若無則建立空白物件
                 const statusObj = localState.dayStatuses[dateStr] || {
                     liked: false,
                     disliked: false,
@@ -900,7 +891,7 @@
                                    class="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300">
                             <span class="whitespace-nowrap">🍽️ 沒有吃光</span>
                         </label>
-                        <label class="flex items-center space-x-1.5 p-1 rounded hover:bg-slate-100/50 cursor-pointer transition bg-purple-50/50 border border-purple-100 rounded">
+                        <label class="flex items-center space-x-1.5 p-1 rounded hover:bg-slate-100/50 cursor-pointer transition bg-purple-50/50 border border-purple-100">
                             <input type="checkbox" onchange="toggleDayStatus('${dateStr}', 'vomit', this.checked)" ${statusObj.vomit ? 'checked' : ''} 
                                    class="w-4 h-4 rounded text-purple-600 focus:ring-purple-400 border-purple-200">
                             <span class="text-purple-700 font-bold whitespace-nowrap">🤮 寶寶嘔吐</span>
