@@ -606,22 +606,23 @@
             initializeAppEngine();
         }
 
-        // 統一更新雲端或本地數據 (Firestore 寫入安全防護)
+        // 統一更新雲端或本地數據 (【核心修復】：立刻在本機刷新 UI 確保打卡圈圈及選單秒速響應！)
         async function updateDataField(field, key, value) {
             localState[field][key] = value;
             saveLocalBackup();
+            
+            // 🚨【關鍵修復 1】：不管有沒有聯網，點選後立刻在 0.01 秒內重新繪製畫面！
+            refreshUI();
 
             if (isCloudMode && firebase.auth().currentUser) {
                 const db = firebase.firestore();
-                // 【修復核心】：儲存時路徑統一對齊 6 段偶數路徑格式
+                // 🚨【關鍵修復 2】：使用 6 段偶數路徑 (在 MyBaby2026/ 底下建立名為 shared_data 的 document)，防止 JavaScript 報錯崩潰！
                 const docRef = db.doc(`artifacts/${appId}/public/data/${familyId}/shared_data`);
                 try {
                     await docRef.set(localState);
                 } catch (err) {
                     logToConsole(`⚠️ 同步變更至雲端失敗：${err.message}`, "error");
                 }
-            } else {
-                refreshUI();
             }
         }
 
@@ -842,7 +843,7 @@
                 tdStatus.innerHTML = `
                     <button onclick="toggleDayStatus('${dateStr}')" id="btn-day-${dateStr}" class="p-2 rounded-full border transition ${
                         isDayChecked 
-                        ? 'bg-emerald-500 border-emerald-500 text-white' 
+                        ? 'bg-emerald-500 border-emerald-500 text-white font-bold' 
                         : 'bg-white border-slate-300 text-slate-400 hover:border-emerald-500 hover:text-emerald-500'
                     }">
                         <i class="w-5 h-5" data-lucide="${isDayChecked ? 'check' : 'circle'}"></i>
