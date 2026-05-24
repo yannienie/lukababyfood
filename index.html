@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>寶寶初嚐固體食物一年計劃 (智能雲端/本地雙模版)</title>
+    <title>寶寶初嚐固體食物一年計劃 (雲端即時同步版)</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- Firebase Compat SDKs (修正相容性問題，防止腳本載入錯誤) -->
+    <!-- Firebase Compat SDKs (相容性佳，防止舊版瀏覽器報錯) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght=300;400;500;700;900&display=swap');
         body {
             font-family: 'Noto Sans TC', sans-serif;
         }
@@ -28,8 +28,8 @@
             <div class="flex items-center space-x-3 mb-2 md:mb-0">
                 <span class="text-3xl">👶</span>
                 <div>
-                    <h1 class="text-xl md:text-2xl font-bold">寶寶固體食物自主計劃 <span id="mode-badge" class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full ml-1 font-bold">本地模式</span></h1>
-                    <p class="text-xs text-amber-100">首嚐日: 2026年5月24日 (約5個月3天大) | 中英對照</p>
+                    <h1 class="text-xl md:text-2xl font-bold">寶寶固體食物自主計劃 <span id="mode-badge" class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full ml-1 font-bold">偵測中...</span></h1>
+                    <p class="text-xs text-amber-100">首嚐日: 2026年5月24日 (約5個月3天大) | 3天無縫連續試敏版</p>
                 </div>
             </div>
             <nav class="flex space-x-2">
@@ -51,7 +51,7 @@
                     <i class="w-5 h-5 animate-spin" id="status-icon" data-lucide="refresh-cw"></i>
                 </div>
                 <div>
-                    <div class="text-sm font-bold text-amber-900" id="sync-text">正在偵測連線狀態...</div>
+                    <div class="text-sm font-bold text-amber-900" id="sync-text">正在連接雲端數據庫... Connecting...</div>
                     <div class="text-xs text-amber-700" id="sync-subtext">3秒內若無響應，將自動啟動本地極速儲存模式。</div>
                 </div>
             </div>
@@ -184,7 +184,7 @@
 
     <!-- JS Scripts & Data -->
     <script>
-        // 香港2026-2027年公眾假期及週末
+        // 香港紅色公眾假期 (僅用於介面標色，不干涉無縫試敏排期)
         const HK_HOLIDAYS_2026_2027 = [
             "2026-05-24", "2026-05-25", "2026-06-19", "2026-07-01", 
             "2026-09-26", "2026-10-01", "2026-10-19", "2026-12-25", 
@@ -200,7 +200,7 @@
             return HK_HOLIDAYS_2026_2027.includes(dateStr);
         }
 
-        // 食材定義
+        // 食材清單 (中英對照)
         const FOOD_ITEMS = {
             grains: [
                 { id: "g1", zh: "強化鐵米粉", en: "Iron-fortified Rice Cereal", intro: 5 },
@@ -332,11 +332,11 @@
             const curr = new Date(dateStr);
             const diffTime = Math.abs(curr - start);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            const totalDays = diffDays + 155; 
+            const totalDays = diffDays + 155; // 5M3D
             return Math.floor(totalDays / 30.5);
         }
 
-        // ------------------ 3天連續無縫排期算法 ------------------
+        // ------------------ 3天連續無縫排程算法 ------------------
         function calculateTestSchedules() {
             const schedule = {};
             let testStartDay = null;
@@ -374,18 +374,37 @@
             return null;
         }
 
-        // ------------------ 雙模控制中心 (關鍵改進) ------------------
+        // ------------------ 雙模控制中心 (Firebase 金鑰嵌入) ------------------
         let currentMonth = "2026-05";
         let activeTab = "planner";
         let isCloudMode = false;
         let familyId = "MyBaby2026"; 
+        let user = null;
         
-        // 本地暫存記憶體
         let localState = {
             trackingState: {},
             selectedTests: {},
             checkedDays: {}
         };
+
+        // ------------------ 🔑 您的專屬雲端金鑰 ------------------
+        let firebaseConfig;
+        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+            firebaseConfig = JSON.parse(__firebase_config);
+        } else {
+            // 自動套用您剛剛生成的 Firebase 金鑰
+            firebaseConfig = {
+                apiKey: "AIzaSyDrzHj--xTO5jWnly0D5aQTRZxYej0dMpw",
+                authDomain: "lukababyfood.firebaseapp.com",
+                projectId: "lukababyfood",
+                storageBucket: "lukababyfood.firebasestorage.app",
+                messagingSenderId: "241745595643",
+                appId: "1:241745595643:web:e83713f508320ae8a3745e",
+                measurementId: "G-VQG6NZ80G9"
+            };
+        }
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-baby-planner';
 
         // 載入本地快照作為安全備份
         function loadLocalBackup() {
@@ -417,12 +436,12 @@
             localStorage.setItem("backup_checkedDays", JSON.stringify(localState.checkedDays));
         }
 
-        // 初始化系統
+        // 初始化系統引擎
         async function initializeAppEngine() {
             loadLocalBackup();
             document.getElementById("family-id-input").value = familyId;
 
-            // 設置自動安全降級定時器：如果 3 秒內 Firebase 沒成功啟動，直接切換到本地模式
+            // 設置自動安全降級定時器
             const fallbackTimeout = setTimeout(() => {
                 if (!isCloudMode) {
                     forceLocalMode();
@@ -430,49 +449,48 @@
             }, 3000);
 
             try {
-                // 檢查是否有配置 Firebase 變數
-                if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                    const config = JSON.parse(__firebase_config);
-                    
-                    // 初始化 Firebase compat
+                if (firebaseConfig) {
                     if (!firebase.apps.length) {
-                        firebase.initializeApp(config);
+                        firebase.initializeApp(firebaseConfig);
                     }
                     
-                    // 登入
+                    // 執行 Rule 3: 優先以 Custom Token 或匿名登入
+                    const auth = firebase.auth();
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await firebase.auth().signInWithCustomToken(__initial_auth_token);
+                        const userCredential = await auth.signInWithCustomToken(__initial_auth_token);
+                        user = userCredential.user;
                     } else {
-                        await firebase.auth().signInAnonymously();
+                        const userCredential = await auth.signInAnonymously();
+                        user = userCredential.user;
                     }
 
-                    // 啟用雲端即時同步
-                    setupCloudSync(fallbackTimeout);
+                    if (user) {
+                        setupCloudSync(fallbackTimeout);
+                    } else {
+                        forceLocalMode();
+                    }
                 } else {
-                    // 無雲端設定，直接本地啟動
-                    clearTimeout(fallbackTimeout);
                     forceLocalMode();
                 }
             } catch (err) {
-                console.warn("Firebase config is missing or invalid. Falling back to LocalStorage.", err);
+                console.warn("Firebase Auth Error. Falling back to LocalStorage.", err);
                 clearTimeout(fallbackTimeout);
                 forceLocalMode();
             }
         }
 
-        // 連接並監聽雲端資料庫
+        // 連接並實時監聽雲端資料庫
         function setupCloudSync(timeoutToClear) {
             const db = firebase.firestore();
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-baby-planner';
             
-            // 雲端資料庫特定文檔路徑 (規則 1)
+            // Rule 1: 嚴格依照雲端公共路徑格式
             const docRef = db.doc(`artifacts/${appId}/public/data/${familyId}`);
 
             docRef.onSnapshot((docSnap) => {
                 clearTimeout(timeoutToClear);
                 isCloudMode = true;
 
-                // 更新界面徽章
+                // 更新 UI 徽章與狀態欄
                 const badge = document.getElementById("mode-badge");
                 badge.innerText = "雲端同步模式";
                 badge.className = "text-xs bg-emerald-500 text-white px-2 py-0.5 rounded-full ml-1 font-bold";
@@ -490,10 +508,9 @@
                     localState.trackingState = data.trackingState || {};
                     localState.selectedTests = data.selectedTests || {};
                     localState.checkedDays = data.checkedDays || {};
-                    // 同步寫入本地備份
                     saveLocalBackup();
                 } else {
-                    // 初次建立雲端結構，使用本地當前狀態初始化
+                    // 若雲端無數據，將本地數據寫入雲端初始化
                     docRef.set(localState);
                 }
 
@@ -504,7 +521,7 @@
             });
         }
 
-        // 強制進入本地模式 (不再等待雲端響應)
+        // 強制進入本地單機模式
         function forceLocalMode() {
             isCloudMode = false;
             
@@ -523,22 +540,20 @@
             refreshUI();
         }
 
-        // 當用戶在輸入框修改家庭 ID 時
+        // 切換家庭 ID 重新對接
         function handleFamilyIdChange(newId) {
             if (!newId.trim()) return;
             familyId = newId.trim();
-            // 重新讀取本地相應配置並試圖連接新家庭 ID 的雲端
             initializeAppEngine();
         }
 
-        // 統一更新雲端或本地數據
+        // 統一更新雲端或本地數據 (Firestore 寫入安全防護)
         async function updateDataField(field, key, value) {
             localState[field][key] = value;
             saveLocalBackup();
 
-            if (isCloudMode) {
+            if (isCloudMode && firebase.auth().currentUser) {
                 const db = firebase.firestore();
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-baby-planner';
                 const docRef = db.doc(`artifacts/${appId}/public/data/${familyId}`);
                 try {
                     await docRef.set(localState);
@@ -648,7 +663,7 @@
                 }
                 tr.appendChild(tdDay);
 
-                // 3. 自主選擇試敏
+                // 3. 自主選擇試敏欄位
                 const tdSelect = document.createElement("td");
                 tdSelect.className = "p-3";
                 
@@ -759,7 +774,7 @@
                 tdSafeMatch.innerHTML = safeHtml;
                 tr.appendChild(tdSafeMatch);
 
-                // 5. 當日打卡狀態
+                // 5. 狀態打卡按鍵
                 const tdStatus = document.createElement("td");
                 tdStatus.className = "p-3 text-center";
                 const isDayChecked = localState.checkedDays[dateStr] === true;
