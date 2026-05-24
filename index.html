@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>寶寶初嚐固體食物一年計劃 (雲端即時同步診斷版)</title>
+    <title>寶寶初嚐固體食物一年計劃 (雲端即時同步版)</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -103,14 +103,14 @@
                 </div>
 
                 <div class="p-4 overflow-x-auto">
-                    <table class="w-full min-w-[800px] border-collapse">
+                    <table class="w-full min-w-[900px] border-collapse">
                         <thead>
                             <tr class="bg-slate-50 border-b border-slate-200 text-left">
                                 <th class="p-3 text-sm font-semibold text-slate-600 w-24">日期 Date</th>
                                 <th class="p-3 text-sm font-semibold text-slate-600 w-24">星期 Day</th>
                                 <th class="p-3 text-sm font-semibold text-slate-600 w-1/3">自主選擇：今日新引進試敏食材 / 觀察項目</th>
                                 <th class="p-3 text-sm font-semibold text-slate-600">已安全通過食材配搭 (中英對照)</th>
-                                <th class="p-3 text-sm font-semibold text-slate-600 w-24 text-center">狀態 Status</th>
+                                <th class="p-3 text-sm font-semibold text-slate-600 w-48">狀態 Status (可多選)</th>
                             </tr>
                         </thead>
                         <tbody id="calendar-body" class="divide-y divide-slate-100">
@@ -390,7 +390,7 @@
             return null;
         }
 
-        // ------------------ 雙模控制中心 (Firebase 診斷除錯器) ------------------
+        // ------------------ 雙模控制中心 ------------------
         let currentMonth = "2026-05";
         let activeTab = "planner";
         let isCloudMode = false;
@@ -401,7 +401,7 @@
         let localState = {
             trackingState: {},
             selectedTests: {},
-            checkedDays: {}
+            dayStatuses: {} // 用於替代原先的單一checkedDays狀態，保存豐富的多選行為
         };
 
         // 診斷日誌功能
@@ -431,11 +431,11 @@
         function loadLocalBackup() {
             const tracking = localStorage.getItem("backup_trackingState");
             const selected = localStorage.getItem("backup_selectedTests");
-            const checked = localStorage.getItem("backup_checkedDays");
+            const statuses = localStorage.getItem("backup_dayStatuses");
 
             localState.trackingState = tracking ? JSON.parse(tracking) : {};
             localState.selectedTests = selected ? JSON.parse(selected) : {};
-            localState.checkedDays = checked ? JSON.parse(checked) : {};
+            localState.dayStatuses = statuses ? JSON.parse(statuses) : {};
 
             // 確保強化鐵米粉(g1)默認是通過的
             if (!localState.trackingState["g1"]) {
@@ -454,7 +454,7 @@
         function saveLocalBackup() {
             localStorage.setItem("backup_trackingState", JSON.stringify(localState.trackingState));
             localStorage.setItem("backup_selectedTests", JSON.stringify(localState.selectedTests));
-            localStorage.setItem("backup_checkedDays", JSON.stringify(localState.checkedDays));
+            localStorage.setItem("backup_dayStatuses", JSON.stringify(localState.dayStatuses));
         }
 
         // 初始化系統引擎
@@ -497,7 +497,6 @@
                     });
 
                     logToConsole("🔑 正在嘗試以「匿名方式」登入 Firebase Auth 服務...");
-                    // 執行登入
                     await auth.signInAnonymously().then(() => {
                         logToConsole("🔓 匿名安全登入命令已送出，等待伺服器驗證...", "success");
                     }).catch(err => {
@@ -526,7 +525,7 @@
             logToConsole("📡 正在向 Firestore 雲端資料庫發送讀寫測試請求...");
             const db = firebase.firestore();
             
-            // 【修復核心】：使用 6 段偶數路徑 (在 MyBaby2026/ 底下建立名為 shared_data 的 document)，防止 JavaScript 報錯崩潰！
+            // 使用嚴格 6 段偶數路徑儲存以防報錯
             const docRef = db.doc(`artifacts/${appId}/public/data/${familyId}/shared_data`);
 
             docRef.onSnapshot((docSnap) => {
@@ -552,7 +551,7 @@
                     const data = docSnap.data();
                     localState.trackingState = data.trackingState || {};
                     localState.selectedTests = data.selectedTests || {};
-                    localState.checkedDays = data.checkedDays || {};
+                    localState.dayStatuses = data.dayStatuses || {};
                     saveLocalBackup();
                 } else {
                     logToConsole("📝 雲端無此家庭密碼之紀錄。正在為您建立初始雲端結構...");
@@ -606,7 +605,7 @@
             initializeAppEngine();
         }
 
-        // 統一更新雲端或本地數據 (【核心修復】：立刻在本機刷新 UI 確保打卡圈圈及選單秒速響應！)
+        // 統一更新雲端或本地數據 (【關鍵修復】：立刻在本機刷新 UI 確保秒速響應！)
         async function updateDataField(field, key, value) {
             localState[field][key] = value;
             saveLocalBackup();
@@ -616,7 +615,7 @@
 
             if (isCloudMode && firebase.auth().currentUser) {
                 const db = firebase.firestore();
-                // 🚨【關鍵修復 2】：使用 6 段偶數路徑 (在 MyBaby2026/ 底下建立名為 shared_data 的 document)，防止 JavaScript 報錯崩潰！
+                // 🚨【關鍵修復 2】：使用 6 段偶數路徑
                 const docRef = db.doc(`artifacts/${appId}/public/data/${familyId}/shared_data`);
                 try {
                     await docRef.set(localState);
@@ -682,6 +681,37 @@
                 btnPlanner.className = "px-4 py-2 rounded-full bg-orange-600/30 text-white font-bold hover:bg-orange-600/50 transition";
                 renderTrackerTable();
             }
+        }
+
+        // ------------------ 狀態欄位處理（智能互斥多選） ------------------
+        function toggleDayStatus(dateStr, statusKey, isChecked) {
+            if (!localState.dayStatuses[dateStr]) {
+                localState.dayStatuses[dateStr] = {
+                    liked: false,
+                    disliked: false,
+                    finished: false,
+                    leftover: false,
+                    vomit: false
+                };
+            }
+            
+            localState.dayStatuses[dateStr][statusKey] = isChecked;
+            
+            // 互斥控制：寶寶喜歡 (liked) 與 寶寶不喜歡 (disliked) 不能同時存在
+            if (statusKey === 'liked' && isChecked) {
+                localState.dayStatuses[dateStr]['disliked'] = false;
+            } else if (statusKey === 'disliked' && isChecked) {
+                localState.dayStatuses[dateStr]['liked'] = false;
+            }
+            
+            // 互斥控制：寶寶吃光了 (finished) 與 寶寶沒有吃光 (leftover) 不能同時存在
+            if (statusKey === 'finished' && isChecked) {
+                localState.dayStatuses[dateStr]['leftover'] = false;
+            } else if (statusKey === 'leftover' && isChecked) {
+                localState.dayStatuses[dateStr]['finished'] = false;
+            }
+            
+            updateDataField('dayStatuses', dateStr, localState.dayStatuses[dateStr]);
         }
 
         function renderCalendar() {
@@ -835,19 +865,47 @@
                 tdSafeMatch.innerHTML = safeHtml;
                 tr.appendChild(tdSafeMatch);
 
-                // 5. 狀態打卡按鍵
+                // 5. 狀態多選打卡（【關鍵改進】：全新多選 UI，觸控極敏捷，自動互斥）
                 const tdStatus = document.createElement("td");
-                tdStatus.className = "p-3 text-center";
-                const isDayChecked = localState.checkedDays[dateStr] === true;
+                tdStatus.className = "p-3";
+                
+                // 獲取目前的狀態物件，若無則建立空白物件
+                const statusObj = localState.dayStatuses[dateStr] || {
+                    liked: false,
+                    disliked: false,
+                    finished: false,
+                    leftover: false,
+                    vomit: false
+                };
                 
                 tdStatus.innerHTML = `
-                    <button onclick="toggleDayStatus('${dateStr}')" id="btn-day-${dateStr}" class="p-2 rounded-full border transition ${
-                        isDayChecked 
-                        ? 'bg-emerald-500 border-emerald-500 text-white font-bold' 
-                        : 'bg-white border-slate-300 text-slate-400 hover:border-emerald-500 hover:text-emerald-500'
-                    }">
-                        <i class="w-5 h-5" data-lucide="${isDayChecked ? 'check' : 'circle'}"></i>
-                    </button>
+                    <div class="flex flex-col gap-1 text-[11px] text-slate-700 select-none">
+                        <label class="flex items-center space-x-1.5 p-1 rounded hover:bg-slate-100/50 cursor-pointer transition">
+                            <input type="checkbox" onchange="toggleDayStatus('${dateStr}', 'liked', this.checked)" ${statusObj.liked ? 'checked' : ''} 
+                                   class="w-4 h-4 rounded text-rose-500 focus:ring-rose-400 border-slate-300">
+                            <span class="whitespace-nowrap">❤️ 寶寶喜歡</span>
+                        </label>
+                        <label class="flex items-center space-x-1.5 p-1 rounded hover:bg-slate-100/50 cursor-pointer transition">
+                            <input type="checkbox" onchange="toggleDayStatus('${dateStr}', 'disliked', this.checked)" ${statusObj.disliked ? 'checked' : ''} 
+                                   class="w-4 h-4 rounded text-blue-500 focus:ring-blue-400 border-slate-300">
+                            <span class="whitespace-nowrap">😢 寶寶不喜歡</span>
+                        </label>
+                        <label class="flex items-center space-x-1.5 p-1 rounded hover:bg-slate-100/50 cursor-pointer transition">
+                            <input type="checkbox" onchange="toggleDayStatus('${dateStr}', 'finished', this.checked)" ${statusObj.finished ? 'checked' : ''} 
+                                   class="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-400 border-slate-300">
+                            <span class="whitespace-nowrap">✨ 寶寶吃光了</span>
+                        </label>
+                        <label class="flex items-center space-x-1.5 p-1 rounded hover:bg-slate-100/50 cursor-pointer transition">
+                            <input type="checkbox" onchange="toggleDayStatus('${dateStr}', 'leftover', this.checked)" ${statusObj.leftover ? 'checked' : ''} 
+                                   class="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300">
+                            <span class="whitespace-nowrap">🍽️ 沒有吃光</span>
+                        </label>
+                        <label class="flex items-center space-x-1.5 p-1 rounded hover:bg-slate-100/50 cursor-pointer transition bg-purple-50/50 border border-purple-100 rounded">
+                            <input type="checkbox" onchange="toggleDayStatus('${dateStr}', 'vomit', this.checked)" ${statusObj.vomit ? 'checked' : ''} 
+                                   class="w-4 h-4 rounded text-purple-600 focus:ring-purple-400 border-purple-200">
+                            <span class="text-purple-700 font-bold whitespace-nowrap">🤮 寶寶嘔吐</span>
+                        </label>
+                    </div>
                 `;
                 tr.appendChild(tdStatus);
 
@@ -857,11 +915,6 @@
 
         function handleSelectChange(dateStr, foodId) {
             updateDataField('selectedTests', dateStr, foodId);
-        }
-
-        function toggleDayStatus(dateStr) {
-            const isDone = localState.checkedDays[dateStr] === true;
-            updateDataField('checkedDays', dateStr, !isDone);
         }
 
         function renderTrackerTable() {
