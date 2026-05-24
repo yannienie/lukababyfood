@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>寶寶初嚐固體食物一年計劃 (雲端即時同步版)</title>
+    <title>寶寶初嚐固體食物一年計劃 (雲端即時同步診斷版)</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- Firebase Compat SDKs (相容性佳，防止舊版瀏覽器報錯) -->
+    <!-- Firebase Compat SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -44,26 +44,42 @@
     </header>
 
     <main class="max-w-6xl mx-auto px-4 mt-6">
-        <!-- CONNECTION STATUS BANNER -->
-        <div id="connection-status" class="bg-amber-100 border-l-4 border-amber-500 p-4 mb-6 rounded-r-lg shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div class="flex items-center">
-                <div class="p-2 bg-amber-200 rounded-full mr-3 text-amber-700" id="status-icon-container">
-                    <i class="w-5 h-5 animate-spin" id="status-icon" data-lucide="refresh-cw"></i>
+        <!-- CONNECTION STATUS BANNER & DEBUGGER -->
+        <div id="connection-status" class="bg-amber-100 border-l-4 border-amber-500 p-4 mb-6 rounded-r-lg shadow-sm flex flex-col gap-3">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
+                <div class="flex items-center">
+                    <div class="p-2 bg-amber-200 rounded-full mr-3 text-amber-700" id="status-icon-container">
+                        <i class="w-5 h-5 animate-spin" id="status-icon" data-lucide="refresh-cw"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-bold text-amber-900" id="sync-text">正在連接雲端數據庫... Connecting...</div>
+                        <div class="text-xs text-amber-700" id="sync-subtext">3秒內若無響應，將自動啟動本地極速儲存模式。</div>
+                    </div>
                 </div>
-                <div>
-                    <div class="text-sm font-bold text-amber-900" id="sync-text">正在連接雲端數據庫... Connecting...</div>
-                    <div class="text-xs text-amber-700" id="sync-subtext">3秒內若無響應，將自動啟動本地極速儲存模式。</div>
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                    <div class="text-xs bg-white/80 border border-amber-200 px-3 py-1.5 rounded-lg">
+                        <span class="font-semibold text-slate-500 text-[10px] block uppercase">Family ID (家庭密碼)</span>
+                        <input type="text" id="family-id-input" onchange="handleFamilyIdChange(this.value)" value="MyBaby2026" 
+                               class="bg-transparent border-none p-0 m-0 font-bold text-slate-800 text-sm focus:outline-none focus:ring-0 w-32 font-mono">
+                    </div>
+                    <button onclick="forceLocalMode()" id="btn-force-local" class="text-xs bg-slate-200 text-slate-700 px-3 py-2 rounded-lg font-bold hover:bg-slate-300 transition">
+                        直接用本地記錄
+                    </button>
                 </div>
             </div>
-            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-                <div class="text-xs bg-white/80 border border-amber-200 px-3 py-1.5 rounded-lg">
-                    <span class="font-semibold text-slate-500 text-[10px] block uppercase">Family ID (家庭密碼)</span>
-                    <input type="text" id="family-id-input" onchange="handleFamilyIdChange(this.value)" value="MyBaby2026" 
-                           class="bg-transparent border-none p-0 m-0 font-bold text-slate-800 text-sm focus:outline-none focus:ring-0 w-32 font-mono">
-                </div>
-                <button onclick="forceLocalMode()" id="btn-force-local" class="text-xs bg-slate-200 text-slate-700 px-3 py-2 rounded-lg font-bold hover:bg-slate-300 transition">
-                    直接用本地記錄
-                </button>
+            
+            <!-- Collapsible Debug Logger -->
+            <div class="mt-2 border-t border-amber-200/50 pt-2 text-xs">
+                <details class="group bg-amber-50/50 rounded-lg p-2 border border-amber-200/30">
+                    <summary class="font-semibold text-amber-800 cursor-pointer flex justify-between items-center select-none">
+                        <span>🔍 查看雲端連線診斷報告 (Diagnostic Logs)</span>
+                        <span class="text-[10px] bg-amber-200/80 px-2 py-0.5 rounded text-amber-900 group-open:hidden">點擊展開</span>
+                        <span class="text-[10px] bg-amber-200/80 px-2 py-0.5 rounded text-amber-900 hidden group-open:inline">收起報告</span>
+                    </summary>
+                    <div id="debug-console" class="mt-2 space-y-1 font-mono text-[11px] text-slate-600 max-h-40 overflow-y-auto bg-slate-900 text-slate-100 p-3 rounded border border-slate-700">
+                        <div>[SYSTEM] 啟動診斷主機...</div>
+                    </div>
+                </details>
             </div>
         </div>
 
@@ -374,7 +390,7 @@
             return null;
         }
 
-        // ------------------ 雙模控制中心 (Firebase 金鑰嵌入) ------------------
+        // ------------------ 雙模控制中心 (Firebase 診斷除錯器) ------------------
         let currentMonth = "2026-05";
         let activeTab = "planner";
         let isCloudMode = false;
@@ -387,6 +403,16 @@
             selectedTests: {},
             checkedDays: {}
         };
+
+        // 診斷日誌功能
+        function logToConsole(message, type = "info") {
+            const consoleEl = document.getElementById("debug-console");
+            if (!consoleEl) return;
+            const timeStr = new Date().toLocaleTimeString();
+            const colorClass = type === "error" ? "text-red-400" : (type === "success" ? "text-emerald-400" : "text-slate-300");
+            consoleEl.innerHTML += `<div class="${colorClass}">[${timeStr}] ${message}</div>`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
 
         // ------------------ 🔑 您的專屬雲端金鑰 ------------------
         let firebaseConfig = {
@@ -433,37 +459,53 @@
 
         // 初始化系統引擎
         async function initializeAppEngine() {
+            logToConsole("====================================");
+            logToConsole("⚙️ 啟動網頁初始化引擎...");
             loadLocalBackup();
             document.getElementById("family-id-input").value = familyId;
 
             // 設置自動安全降級定時器
             fallbackTimeout = setTimeout(() => {
                 if (!isCloudMode) {
-                    forceLocalMode("📡 連線逾時，切換至本地快取。請確認 Firebase Console 內已建立 Firestore Database 並啟用「匿名登入」！");
+                    logToConsole("⏳ 連線偵測超時 (6秒無響應)，安全降級啟動本地儲存。", "error");
+                    forceLocalMode("📡 連線逾時，切換至本地快取。如果您已設定好雲端，此超時可能是由於 AdBlocker (廣告阻擋器) 或 Brave 瀏覽器阻擋了 Google 服務！");
                 }
-            }, 6000); // 增加到 6 秒，給予較充裕的時間診斷
+            }, 6000); 
 
             try {
                 if (firebaseConfig) {
+                    logToConsole("📦 正在偵測 Firebase 套件是否加載...");
+                    if (typeof firebase === "undefined") {
+                        throw new Error("網頁載入 Firebase SDK 失敗！請檢查您的網絡或是否開啟了防廣告/保護插件。");
+                    }
+                    
+                    logToConsole("🔧 初始化 Firebase App 實體...");
                     if (!firebase.apps.length) {
                         firebase.initializeApp(firebaseConfig);
                     }
+                    logToConsole("✅ Firebase App 初始化成功。", "success");
                     
                     const auth = firebase.auth();
                     
                     // 登入監聽
                     auth.onAuthStateChanged((currentUser) => {
                         if (currentUser) {
+                            logToConsole(`👤 帳號登入狀態變更: 匿名 ID (${currentUser.uid}) 已成功握手。`, "success");
                             user = currentUser;
                             setupCloudSync(fallbackTimeout);
                         }
                     });
 
+                    logToConsole("🔑 正在嘗試以「匿名方式」登入 Firebase Auth 服務...");
                     // 執行登入
-                    await auth.signInAnonymously().catch(err => {
-                        // 診斷：是否未在 Console 啟用匿名登入
+                    await auth.signInAnonymously().then(() => {
+                        logToConsole("🔓 匿名安全登入命令已送出，等待伺服器驗證...", "success");
+                    }).catch(err => {
+                        logToConsole(`❌ 登入遭到拒絕。代碼: ${err.code}`, "error");
                         if (err.code === 'auth/operation-not-allowed') {
                             throw new Error("⚠️ 登入失敗：請前往 Firebase Console -> Authentication -> Sign-in method 啟用『匿名 (Anonymous)』登入方式！");
+                        } else if (err.code === 'auth/network-request-failed') {
+                            throw new Error("⚠️ 登入失敗：連線被瀏覽器攔截。請「關閉 AdBlocker / Brave 屏蔽盾」或嘗試暫時關閉手機 Wi-Fi、改用 4G/5G 網絡打開此頁面。");
                         } else {
                             throw err;
                         }
@@ -473,7 +515,7 @@
                     forceLocalMode("❌ 找不到有效的 Firebase 金鑰配置。");
                 }
             } catch (err) {
-                console.warn("Firebase Init Diagnostics:", err);
+                logToConsole(`💥 初始化發生崩潰：${err.message}`, "error");
                 clearTimeout(fallbackTimeout);
                 forceLocalMode(err.message || "⚠️ 無法連接至 Firebase 服務，請確認網絡連線。");
             }
@@ -481,10 +523,14 @@
 
         // 連接並實時監聽雲端資料庫
         function setupCloudSync(timeoutToClear) {
+            logToConsole("📡 正在向 Firestore 雲端資料庫發送讀寫測試請求...");
             const db = firebase.firestore();
-            const docRef = db.doc(`artifacts/${appId}/public/data/${familyId}`);
+            
+            // 【修復核心】：使用 6 段偶數路徑 (在 MyBaby2026/ 底下建立名為 shared_data 的 document)，防止 JavaScript 報錯崩潰！
+            const docRef = db.doc(`artifacts/${appId}/public/data/${familyId}/shared_data`);
 
             docRef.onSnapshot((docSnap) => {
+                logToConsole("🎉 雲端連線測試大成功！已成功握手並讀取遠端數據。", "success");
                 clearTimeout(timeoutToClear);
                 isCloudMode = true;
 
@@ -494,7 +540,7 @@
                 badge.className = "text-xs bg-emerald-500 text-white px-2 py-0.5 rounded-full ml-1 font-bold";
 
                 const banner = document.getElementById("connection-status");
-                banner.className = "bg-emerald-50 border-l-4 border-emerald-500 p-4 mb-6 rounded-r-lg shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3";
+                banner.className = "bg-emerald-50 border-l-4 border-emerald-500 p-4 mb-6 rounded-r-lg shadow-sm flex flex-col gap-3";
 
                 document.getElementById("status-icon-container").className = "p-2 bg-emerald-200 rounded-full mr-3 text-emerald-700";
                 document.getElementById("status-icon").setAttribute("data-lucide", "wifi");
@@ -502,27 +548,30 @@
                 document.getElementById("sync-subtext").innerText = "全家人與工人姐姐的手機數據正在實時即時同步中。";
 
                 if (docSnap.exists()) {
+                    logToConsole("📥 雲端有現成備份。正在同步更新至本機畫面。");
                     const data = docSnap.data();
                     localState.trackingState = data.trackingState || {};
                     localState.selectedTests = data.selectedTests || {};
                     localState.checkedDays = data.checkedDays || {};
                     saveLocalBackup();
                 } else {
-                    // 若雲端無數據，將本地數據寫入雲端初始化
-                    docRef.set(localState).catch(err => {
-                        console.error("Firestore init write error:", err);
+                    logToConsole("📝 雲端無此家庭密碼之紀錄。正在為您建立初始雲端結構...");
+                    docRef.set(localState).then(() => {
+                        logToConsole("💾 雲端初始檔案初始化寫入完成。", "success");
+                    }).catch(err => {
+                        logToConsole(`⚠️ 寫入雲端失敗：${err.code} - ${err.message}`, "error");
                         if (err.code === 'permission-denied') {
-                            forceLocalMode("⚠️ 寫入雲端被拒絕：請前往 Firestore Database -> Rules (規則) 將規則改為測試模式以允許寫入！");
+                            forceLocalMode("⚠️ 寫入雲端被拒絕：請確認您已在 Firestore Database 內將 Rules (規則) 改成允許讀寫！");
                         }
                     });
                 }
 
                 refreshUI();
             }, (error) => {
-                console.error("Firestore onSnapshot error:", error);
+                logToConsole(`❌ 監聽雲端發生錯誤：${error.code} - ${error.message}`, "error");
                 clearTimeout(timeoutToClear);
                 if (error.code === 'permission-denied') {
-                    forceLocalMode("⚠️ 讀取雲端被拒絕：請確認您已在 Firestore Database 內點選『建立資料庫』並啟用『測試模式規則』！");
+                    forceLocalMode("⚠️ 讀取雲端被拒絕：請確認您已在 Firestore Database 的『Rules 規則』中將安全性規則改成允許讀寫（測試模式）！");
                 } else {
                     forceLocalMode("⚠️ 載入 Firestore 數據時發生錯誤。");
                 }
@@ -539,7 +588,7 @@
             badge.className = "text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full ml-1 font-bold";
 
             const banner = document.getElementById("connection-status");
-            banner.className = "bg-amber-100 border-l-4 border-amber-400 p-4 mb-6 rounded-r-lg shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3";
+            banner.className = "bg-amber-100 border-l-4 border-amber-400 p-4 mb-6 rounded-r-lg shadow-sm flex flex-col gap-3";
 
             document.getElementById("status-icon-container").className = "p-2 bg-amber-200 rounded-full mr-3 text-amber-700";
             document.getElementById("status-icon").setAttribute("data-lucide", "alert-circle");
@@ -564,11 +613,12 @@
 
             if (isCloudMode && firebase.auth().currentUser) {
                 const db = firebase.firestore();
-                const docRef = db.doc(`artifacts/${appId}/public/data/${familyId}`);
+                // 【修復核心】：儲存時路徑統一對齊 6 段偶數路徑格式
+                const docRef = db.doc(`artifacts/${appId}/public/data/${familyId}/shared_data`);
                 try {
                     await docRef.set(localState);
                 } catch (err) {
-                    console.error("Cloud upload failed:", err);
+                    logToConsole(`⚠️ 同步變更至雲端失敗：${err.message}`, "error");
                 }
             } else {
                 refreshUI();
